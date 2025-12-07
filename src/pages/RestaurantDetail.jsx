@@ -11,7 +11,10 @@ const RestaurantDetail = ({ restaurant, onBack, isOwner, onEdit, onDelete }) => 
   };
 
   const handleMap = () => {
+    // Prioridad: Coordenadas GPS > Dirección
     const query = restaurant.coords ? restaurant.coords : restaurant.address;
+    
+    // Abre Google Maps (funciona gratis con links)
     window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
   };
 
@@ -23,7 +26,13 @@ const RestaurantDetail = ({ restaurant, onBack, isOwner, onEdit, onDelete }) => 
 
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-6">
         <div className="h-48 bg-gray-800 relative">
-            <img src={`https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=400&fit=crop`} alt="Cover" className="w-full h-full object-cover opacity-60" />          <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black/80 to-transparent text-white">
+          {/* Imagen aleatoria de comida de alta calidad */}
+          <img 
+            src={`https://images.unsplash.com/photo-1555396273-367ea4eb4db5?q=80&w=1000&auto=format&fit=crop`} 
+            alt="Cover" 
+            className="w-full h-full object-cover opacity-60" 
+          />
+          <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black/80 to-transparent text-white">
             <h1 className="text-3xl md:text-4xl font-bold">{restaurant.name}</h1>
             <p className="text-gray-200">{restaurant.description}</p>
           </div>
@@ -34,7 +43,7 @@ const RestaurantDetail = ({ restaurant, onBack, isOwner, onEdit, onDelete }) => 
             <Phone size={18}/> Llamar
           </Button>
           <Button onClick={handleMap} variant="outline" className="flex-1 md:flex-none">
-            <MapPin size={18}/> Ubicación
+            <MapPin size={18}/> Ver en Mapa Real
           </Button>
           
           {isOwner && (
@@ -55,13 +64,19 @@ const RestaurantDetail = ({ restaurant, onBack, isOwner, onEdit, onDelete }) => 
               <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-2">
                 <Clock size={18} className="text-orange-500"/> Horarios
               </h3>
-              <p className="text-gray-600 text-sm bg-gray-50 p-3 rounded-lg">{restaurant.schedule}</p>
+              {/* Parseamos el horario si viene como texto largo */}
+              <div className="text-gray-600 text-sm bg-gray-50 p-3 rounded-lg whitespace-pre-line">
+                {restaurant.schedule.split(', ').map((line, i) => (
+                    <div key={i} className="mb-1">{line}</div>
+                ))}
+              </div>
             </div>
             <div>
               <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-2">
                 <MapPin size={18} className="text-orange-500"/> Dirección
               </h3>
               <p className="text-gray-600 text-sm">{restaurant.address}</p>
+              {restaurant.coords && <p className="text-xs text-gray-400 mt-1">GPS: {restaurant.coords}</p>}
             </div>
           </div>
 
