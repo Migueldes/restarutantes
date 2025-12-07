@@ -23,8 +23,7 @@ const RestaurantDetail = ({ restaurant, onBack, isOwner, onEdit, onDelete }) => 
 
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-6">
         <div className="h-48 bg-gray-800 relative">
-          <img src={`https://source.unsplash.com/800x400/?restaurant,food`} alt="Cover" className="w-full h-full object-cover opacity-60" />
-          <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black/80 to-transparent text-white">
+            <img src={`https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=400&fit=crop`} alt="Cover" className="w-full h-full object-cover opacity-60" />          <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black/80 to-transparent text-white">
             <h1 className="text-3xl md:text-4xl font-bold">{restaurant.name}</h1>
             <p className="text-gray-200">{restaurant.description}</p>
           </div>
