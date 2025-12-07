@@ -42,7 +42,7 @@ const RestaurantDetail = ({ restaurant, onBack, isOwner, onEdit, onDelete }) => 
             <Phone size={18}/> Llamar
           </Button>
           <Button onClick={handleMap} variant="outline" className="flex-1 md:flex-none">
-            <MapPin size={18}/> Ver en Mapa Real
+            <MapPin size={18}/> Mapa
           </Button>
           
           {isOwner && (

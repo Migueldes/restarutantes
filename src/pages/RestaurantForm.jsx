@@ -20,7 +20,6 @@ const RestaurantForm = ({ initialData, onSave, onCancel }) => {
   const [searchingLocation, setSearchingLocation] = useState(false);
   const [locationFound, setLocationFound] = useState(false);
 
-  // --- PARTE 1: LOGICA DE HORARIOS ---
   const [scheduleData, setScheduleData] = useState(() => {
     return DAYS.map(day => ({
       day,
@@ -34,17 +33,14 @@ const RestaurantForm = ({ initialData, onSave, onCancel }) => {
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    // Si cambia la dirección, reseteamos el estado de "encontrado"
     if(field === 'address') setLocationFound(false);
   };
 
-  // --- PARTE 2: BUSCADOR DE UBICACIÓN REAL (OpenStreetMap) ---
   const handleSearchLocation = async () => {
     if(!formData.address) return alert("Escribe una dirección primero.");
     
     setSearchingLocation(true);
     try {
-      // Usamos la API gratuita de Nominatim (OpenStreetMap)
       const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(formData.address)}`);
       const data = await response.json();
 
@@ -54,9 +50,11 @@ const RestaurantForm = ({ initialData, onSave, onCancel }) => {
         
         setFormData(prev => ({ ...prev, coords: coords }));
         setLocationFound(true);
-        alert(`✅ ¡Ubicación encontrada!\nLat: ${bestMatch.lat}\nLon: ${bestMatch.lon}`);
+        // EMOJI ELIMINADO AQUÍ
+        alert(`Ubicación encontrada!\nLat: ${bestMatch.lat}\nLon: ${bestMatch.lon}`);
       } else {
-        alert("❌ No pudimos encontrar esa dirección. Intenta ser más específico (Calle, Número, Ciudad, País).");
+        // EMOJI ELIMINADO AQUÍ
+        alert("No pudimos encontrar esa dirección. Intenta ser más específico (Calle, Número, Ciudad, País).");
         setLocationFound(false);
       }
     } catch (error) {
@@ -67,7 +65,6 @@ const RestaurantForm = ({ initialData, onSave, onCancel }) => {
     }
   };
 
-  // --- RESTO DE LA LÓGICA (Igual que antes) ---
   const handleScheduleChange = (index, field, value) => {
     const newSchedule = [...scheduleData];
     newSchedule[index][field] = value;
@@ -115,7 +112,6 @@ const RestaurantForm = ({ initialData, onSave, onCancel }) => {
         
         <InputGroup label="Descripción Corta" value={formData.description} onChange={e => handleChange('description', e.target.value)} required />
         
-        {/* --- CAMPO DE DIRECCIÓN INTELIGENTE --- */}
         <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Dirección Física *</label>
             <div className="flex gap-2">
@@ -136,10 +132,10 @@ const RestaurantForm = ({ initialData, onSave, onCancel }) => {
                     {searchingLocation ? 'Buscando...' : <><Search size={18}/> {locationFound ? 'Verificado' : 'Validar'}</>}
                 </button>
             </div>
-            {locationFound && <p className="text-xs text-green-600 mt-1 font-medium">✓ Coordenadas GPS detectadas: {formData.coords}</p>}
+            {/* EMOJI ELIMINADO AQUÍ TAMBIÉN */}
+            {locationFound && <p className="text-xs text-green-600 mt-1 font-medium">Coordenadas GPS detectadas: {formData.coords}</p>}
         </div>
 
-        {/* --- HORARIOS --- */}
         <div className="mb-6 border rounded-lg overflow-hidden">
             <div className="bg-orange-50 p-3 border-b flex items-center gap-2">
                 <Clock size={18} className="text-orange-600"/>
@@ -169,7 +165,6 @@ const RestaurantForm = ({ initialData, onSave, onCancel }) => {
             </div>
         </div>
 
-        {/* --- MENU --- */}
         <div className="mt-8 border-t pt-6">
           <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><MenuIcon size={20}/> Menú Digital</h3>
           <div className="flex gap-2 mb-4 bg-gray-50 p-3 rounded-lg">

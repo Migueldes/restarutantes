@@ -1,3 +1,4 @@
+// server/index.js
 require('dotenv').config();
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
@@ -8,7 +9,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --- 1. CONFIGURAR TWILIO (Si fallan las claves, no explotará la app) ---
+// --- 1. CONFIGURAR TWILIO ---
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
@@ -17,13 +18,13 @@ let client;
 if (accountSid && authToken) {
   client = new twilio(accountSid, authToken);
 } else {
-  console.warn("⚠️ ADVERTENCIA: No se encontraron claves de Twilio en .env");
+  console.warn("ADVERTENCIA: No se encontraron claves de Twilio en .env");
 }
 
-// --- 2. CONECTAR BASE DE DATOS (Corrección del error 'db not defined') ---
+// --- 2. CONECTAR BASE DE DATOS ---
 const db = new sqlite3.Database('./gastro.db', (err) => {
   if (err) console.error("Error al abrir BD:", err.message);
-  else console.log('✅ Base de datos SQLite conectada.');
+  else console.log('Base de datos SQLite conectada.');
 });
 
 // --- 3. CREAR TABLAS ---
@@ -38,34 +39,31 @@ db.serialize(() => {
     FOREIGN KEY(restaurant_id) REFERENCES restaurants(id)
   )`);
 
-  // Tabla para guardar códigos temporales de SMS
   db.run(`CREATE TABLE IF NOT EXISTS verification_codes (
     phone TEXT PRIMARY KEY, code TEXT, created_at INTEGER
   )`);
 });
 
-// --- RUTAS DE SMS REALES ---
+// --- RUTAS DE SMS ---
 
 app.post('/api/send-code', async (req, res) => {
   const { phone } = req.body;
   if (!client) return res.status(500).json({ error: "Servidor no configurado para SMS" });
 
-  const code = Math.floor(100000 + Math.random() * 900000).toString(); // Código de 6 dígitos
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
 
-  // 1. Guardar código en BD
   db.run("INSERT OR REPLACE INTO verification_codes (phone, code, created_at) VALUES (?, ?, ?)", 
     [phone, code, Date.now()], 
     async function(err) {
       if (err) return res.status(500).json({ error: err.message });
 
-      // 2. Enviar SMS real
       try {
         await client.messages.create({
           body: `Tu código de Gastro es: ${code}`,
           from: twilioPhone,
           to: phone
         });
-        console.log(`📨 SMS enviado a ${phone}`);
+        console.log(`SMS enviado a ${phone}`);
         res.json({ success: true });
       } catch (twilioError) {
         console.error("Error Twilio:", twilioError);
@@ -81,7 +79,7 @@ app.post('/api/verify-code', (req, res) => {
     if (err) return res.status(500).json({ error: err.message });
     
     if (row && row.code === code) {
-      db.run("DELETE FROM verification_codes WHERE phone = ?", [phone]); // Borrar código usado
+      db.run("DELETE FROM verification_codes WHERE phone = ?", [phone]);
       res.json({ success: true });
     } else {
       res.status(400).json({ success: false, message: "Código incorrecto" });
@@ -108,10 +106,14 @@ app.get('/api/restaurants', (req, res) => {
 });
 
 app.post('/api/restaurants', (req, res) => {
-  const { name, description, phone, address, schedule, coords, ownerId, menu } = req.body;
+  const { name, description, phone, address, schedule, coords, owner_id, menu } = req.body;
+  // Nota: Asegúrate de recibir 'owner_id' o 'ownerId' consistentemente desde el frontend.
+  // Aquí asumo que lo envías como ownerId desde React pero la columna es owner_id.
+  const owner = req.body.ownerId || owner_id; 
+
   const sql = `INSERT INTO restaurants (name, description, phone, address, schedule, coords, owner_id) VALUES (?,?,?,?,?,?,?)`;
   
-  db.run(sql, [name, description, phone, address, schedule, coords, ownerId], function(err) {
+  db.run(sql, [name, description, phone, address, schedule, coords, owner], function(err) {
     if (err) return res.status(500).json({ error: err.message });
     const newId = this.lastID;
     
@@ -132,5 +134,5 @@ app.delete('/api/restaurants/:id', (req, res) => {
 });
 
 app.listen(3001, () => {
-  console.log('🚀 Servidor listo en http://localhost:3001');
+  console.log('Servidor listo en http://localhost:3001');
 });
