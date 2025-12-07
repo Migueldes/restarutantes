@@ -26,7 +26,6 @@ const RestaurantDetail = ({ restaurant, onBack, isOwner, onEdit, onDelete }) => 
 
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-6">
         <div className="h-48 bg-gray-800 relative">
-          {/* Imagen aleatoria de comida de alta calidad */}
           <img 
             src={`https://images.unsplash.com/photo-1555396273-367ea4eb4db5?q=80&w=1000&auto=format&fit=crop`} 
             alt="Cover" 
@@ -64,7 +63,6 @@ const RestaurantDetail = ({ restaurant, onBack, isOwner, onEdit, onDelete }) => 
               <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-2">
                 <Clock size={18} className="text-orange-500"/> Horarios
               </h3>
-              {/* Parseamos el horario si viene como texto largo */}
               <div className="text-gray-600 text-sm bg-gray-50 p-3 rounded-lg whitespace-pre-line">
                 {restaurant.schedule.split(', ').map((line, i) => (
                     <div key={i} className="mb-1">{line}</div>

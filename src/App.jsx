@@ -99,15 +99,12 @@ export default function App() {
     setView('register');
   };
 
-  // --- FILTRO MAESTRO ---
-  // 1. Filtra por búsqueda (texto)
-  // 2. Si showOnlyMine está activo, filtra por ownerId == user.phone
   const filteredRestaurants = restaurants.filter(r => {
     const matchesSearch = r.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           r.description.toLowerCase().includes(searchTerm.toLowerCase());
     
     if (showOnlyMine && user) {
-      return matchesSearch && String(r.ownerId) === String(user.id);
+      return matchesSearch && String(r.owner_id) === String(user.id);
     }
     return matchesSearch;
   });
@@ -228,8 +225,7 @@ export default function App() {
           <RestaurantDetail 
             restaurant={selectedRestaurant} 
             onBack={() => setView('catalog')}
-            // Verificamos si el ID del dueño es IGUAL al teléfono del usuario actual
-            isOwner={user && String(user.id) === String(selectedRestaurant.ownerId)}
+            isOwner={user && String(user.id) === String(selectedRestaurant.owner_id)}
             onEdit={startEdit}
             onDelete={handleDeleteRestaurant}
           />
