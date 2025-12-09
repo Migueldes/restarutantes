@@ -1,98 +1,104 @@
-import React, { useState } from 'react';
-import { User } from 'lucide-react';
+// src/pages/LoginView.jsx
+import React, { useState, useEffect } from 'react';
+import { User, ShieldCheck } from 'lucide-react';
+import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
+import { auth } from '../firebaseConfig'; // Importamos la config que creaste
 import Button from '../components/Button';
 import InputGroup from '../components/InputGroup';
 
 const LoginView = ({ onLogin, onCancel }) => {
-  const [step, setStep] = useState(1); 
+  const [step, setStep] = useState(1); // 1: Teléfono, 2: Código
   const [phone, setPhone] = useState('');
-  const [code, setCode] = useState('');
+  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
+  const [confirmObj, setConfirmObj] = useState(null); // Objeto para confirmar el código
 
-  // IMPORTANTE: Twilio necesita el formato internacional
-  // Si escribes 10 dígitos, asumimos que es México (+52). 
-  // Si eres de otro país, cambia el +52 por tu código.
+  // Formatear a +52 (México) si no tiene código de país
   const formatPhone = (p) => {
     if (p.startsWith('+')) return p;
     return `+52${p}`; 
   };
 
-  // --- PASO 1: ENVIAR EL CÓDIGO (Conectando al Servidor Real) ---
+  // Inicializar Recaptcha Invisible (Requisito de Google)
+  useEffect(() => {
+    if (!window.recaptchaVerifier) {
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        'size': 'invisible',
+        'callback': (response) => {
+          // reCAPTCHA solved automatically
+        }
+      });
+    }
+  }, []);
+
+  // --- PASO 1: PEDIR EL SMS A GOOGLE ---
   const handleSendCode = async (e) => {
     e.preventDefault();
-    if(phone.length < 10) return alert("Ingresa un número válido");
+    if(phone.length < 10) return alert("Número inválido");
     
     setLoading(true);
+    const phoneNumber = formatPhone(phone);
 
     try {
-      // Aquí hacemos la petición real a tu servidor
-      const res = await fetch('http://localhost:3001/api/send-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: formatPhone(phone) })
-      });
+      const appVerifier = window.recaptchaVerifier;
+      // Esta función de Firebase envía el SMS real
+      const confirmation = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
       
-      const data = await responseTimeout(res); // Pequeña ayuda por si tarda
-      
-      if (data.success) {
-        setStep(2); // Si Twilio dijo "OK", pasamos a pedir el código
-      } else {
-        alert("Error enviando SMS: " + (data.error || "Revisa el número"));
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Error: Asegúrate que el servidor (node index.js) esté encendido.");
+      setConfirmObj(confirmation); // Guardamos la "promesa" de confirmación
+      setStep(2);
+      alert("SMS enviado. Revisa tu celular.");
+    } catch (error) {
+      console.error("Error SMS:", error);
+      alert("Error enviando SMS: " + error.message);
+      // Si falla, reseteamos el captcha
+      if(window.recaptchaVerifier) window.recaptchaVerifier.clear();
     } finally {
       setLoading(false);
     }
   };
 
-  // --- PASO 2: VERIFICAR EL CÓDIGO ---
+  // --- PASO 2: VERIFICAR EL CÓDIGO CON GOOGLE ---
   const handleVerify = async (e) => {
     e.preventDefault();
+    if(!otp || !confirmObj) return;
+    
     setLoading(true);
-
     try {
-      const res = await fetch('http://localhost:3001/api/verify-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: formatPhone(phone), code })
-      });
-
-      const data = await responseTimeout(res);
-
-      if (data.success) {
-        onLogin(formatPhone(phone)); // ¡Login Real Exitoso!
-      } else {
-        alert("Código incorrecto o expirado.");
-      }
-    } catch (err) {
-      alert("Error al verificar código.");
+      // Le preguntamos a Firebase si el código es correcto
+      const result = await confirmObj.confirm(otp);
+      
+      // Si llegamos aquí, ¡es correcto!
+      const user = result.user;
+      console.log("Usuario verificado:", user);
+      
+      // Iniciamos sesión en TU app
+      onLogin(user.phoneNumber); 
+    } catch (error) {
+      alert("Código incorrecto o expirado.");
     } finally {
       setLoading(false);
     }
   };
-
-  // Función auxiliar para leer la respuesta de forma segura
-  const responseTimeout = async (res) => {
-      const data = await res.json();
-      return data;
-  }
 
   return (
     <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-xl shadow-lg">
       <div className="text-center mb-6">
         <div className="inline-block p-3 bg-orange-100 rounded-full mb-2">
-          <User className="w-8 h-8 text-orange-600" />
+          {step === 1 ? <User className="w-8 h-8 text-orange-600" /> : <ShieldCheck className="w-8 h-8 text-green-600"/>}
         </div>
-        <h2 className="text-2xl font-bold text-gray-800">Acceso Dueños</h2>
-        <p className="text-sm text-gray-500">Sistema de Verificación Real</p>
+        <h2 className="text-2xl font-bold text-gray-800">
+          {step === 1 ? 'Acceso Telefónico' : 'Verificar Identidad'}
+        </h2>
+        <p className="text-sm text-gray-500">Powered by Firebase Auth</p>
       </div>
+
+      {/* Contenedor invisible para el Recaptcha */}
+      <div id="recaptcha-container"></div>
 
       {step === 1 ? (
         <form onSubmit={handleSendCode}>
           <InputGroup 
-            label="Número Celular (10 dígitos)" 
+            label="Celular (10 dígitos)" 
             placeholder="Ej: 5512345678" 
             value={phone} 
             onChange={e => setPhone(e.target.value.replace(/\D/,''))} 
@@ -101,10 +107,15 @@ const LoginView = ({ onLogin, onCancel }) => {
           />
           <div className="flex gap-2 flex-col">
              <Button type="submit" className="w-full" disabled={loading}>
-               {loading ? 'Enviando a Twilio...' : 'Enviar Código SMS'}
+               {loading ? 'Enviando...' : 'Enviar SMS'}
              </Button>
-             <Button type="button" variant="secondary" onClick={onCancel} disabled={loading}>Cancelar</Button>
+             <Button type="button" variant="secondary" onClick={onCancel} disabled={loading}>
+               Cancelar
+             </Button>
           </div>
+          <p className="text-xs text-gray-400 mt-4 text-center">
+            Podrías recibir un desafío de "No soy un robot".
+          </p>
         </form>
       ) : (
         <form onSubmit={handleVerify}>
@@ -112,17 +123,23 @@ const LoginView = ({ onLogin, onCancel }) => {
             Ingresa el código enviado a {formatPhone(phone)}
           </p>
           <InputGroup 
-            label="Código de Verificación" 
-            placeholder="Ej: 123456" 
-            value={code} 
-            onChange={e => setCode(e.target.value)} 
+            label="Código de 6 dígitos" 
+            placeholder="123456" 
+            value={otp} 
+            onChange={e => setOtp(e.target.value)} 
             type="number"
             required
           />
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Verificando...' : 'Verificar y Entrar'}
+            {loading ? 'Verificando...' : 'Entrar'}
           </Button>
-          <button type="button" onClick={() => setStep(1)} className="mt-4 text-sm text-orange-600 hover:underline w-full text-center">Cambiar número</button>
+          <button 
+            type="button" 
+            onClick={() => { setStep(1); setOtp(''); }} 
+            className="mt-4 text-sm text-orange-600 hover:underline w-full text-center"
+          >
+            ¿Número equivocado?
+          </button>
         </form>
       )}
     </div>
