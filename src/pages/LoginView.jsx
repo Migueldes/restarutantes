@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, ShieldCheck } from 'lucide-react';
 import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
-import { auth } from '../firebaseConfig'; // Importamos tu configuración
+import { auth } from '../firebaseConfig'; // Asegúrate que esta ruta sea correcta
 import Button from '../components/Button';
 import InputGroup from '../components/InputGroup';
 
@@ -26,22 +26,40 @@ const LoginView = ({ onLogin, onCancel }) => {
         'size': 'invisible',
         'callback': () => {
           // Captcha resuelto automáticamente
+        },
+        'expired-callback': () => {
+          // Si el captcha expira, lo limpiamos para evitar errores
+          if (window.recaptchaVerifier) window.recaptchaVerifier.clear();
         }
       });
     }
+
+    // --- CORRECCIÓN IMPORTANTE 1: LIMPIEZA ---
+    // Esta función se ejecuta cuando te vas de la pantalla (Login exitoso o Cancelar)
+    // Borra la instancia del Captcha para que no choque si vuelves a entrar.
+    return () => {
+      if (window.recaptchaVerifier) {
+        try {
+          window.recaptchaVerifier.clear();
+        } catch (e) {
+          console.warn("Captcha ya estaba limpio");
+        }
+        window.recaptchaVerifier = null;
+      }
+    };
   }, []);
 
   // --- ENVIAR SMS ---
   const handleSendCode = async (e) => {
     e.preventDefault();
-    if(phone.length < 10) return alert("Número inválido (mínimo 10 dígitos)");
+    if (phone.length < 10) return alert("Número inválido (mínimo 10 dígitos)");
     
     setLoading(true);
     const phoneNumber = formatPhone(phone);
 
     try {
       const appVerifier = window.recaptchaVerifier;
-      // Google envía el SMS aquí
+      // Google envía el SMS aquí (o simula si es número de prueba)
       const confirmation = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
       
       setConfirmObj(confirmation);
@@ -49,10 +67,18 @@ const LoginView = ({ onLogin, onCancel }) => {
       alert("SMS enviado. Revisa tu celular.");
     } catch (error) {
       console.error("Error Firebase:", error);
-      alert("No se pudo enviar el SMS. Verifica que el número sea correcto y tengas internet.");
       
-      // Resetear captcha si falla
-      if(window.recaptchaVerifier) window.recaptchaVerifier.clear();
+      // Mensajes de error más amigables
+      if (error.code === 'auth/billing-not-enabled') {
+        alert("Error: El proyecto de Firebase necesita plan de pago o usar Números de Prueba.");
+      } else if (error.code === 'auth/too-many-requests') {
+        alert("Demasiados intentos. Espera unos minutos.");
+      } else {
+        alert("Error: " + error.message);
+      }
+
+      // Resetear captcha si falla para permitir reintentar
+      if (window.recaptchaVerifier) window.recaptchaVerifier.clear();
     } finally {
       setLoading(false);
     }
@@ -61,11 +87,13 @@ const LoginView = ({ onLogin, onCancel }) => {
   // --- VERIFICAR CÓDIGO ---
   const handleVerify = async (e) => {
     e.preventDefault();
-    if(!otp) return;
+    if (!otp) return;
     
     setLoading(true);
     try {
       // Google verifica si el código es real
+      if (!confirmObj) throw new Error("No hay código enviado");
+
       const result = await confirmObj.confirm(otp);
       
       // Si pasa, obtenemos el usuario
@@ -75,9 +103,24 @@ const LoginView = ({ onLogin, onCancel }) => {
       // ¡Login exitoso! Entramos a la app
       onLogin(user.phoneNumber); 
     } catch (error) {
+      console.error(error);
       alert("Código incorrecto o expirado.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // --- CORRECCIÓN IMPORTANTE 2: RESETEAR AL CAMBIAR NÚMERO ---
+  const handleWrongNumber = () => {
+    setStep(1); 
+    setOtp('');
+    // Limpiamos el captcha anterior para generar uno nuevo limpio
+    if (window.recaptchaVerifier) {
+      try {
+        window.recaptchaVerifier.clear();
+      } catch (e) {
+        console.warn("No se pudo limpiar captcha");
+      }
     }
   };
 
@@ -102,7 +145,7 @@ const LoginView = ({ onLogin, onCancel }) => {
             label="Celular (10 dígitos)" 
             placeholder="Ej: 5512345678" 
             value={phone} 
-            onChange={e => setPhone(e.target.value.replace(/\D/g,''))}
+            onChange={e => setPhone(e.target.value.replace(/\D/g,''))} 
             type="tel"
             required
           />
@@ -136,7 +179,7 @@ const LoginView = ({ onLogin, onCancel }) => {
           </Button>
           <button 
             type="button" 
-            onClick={() => { setStep(1); setOtp(''); }} 
+            onClick={handleWrongNumber} 
             className="mt-4 text-sm text-orange-600 hover:underline w-full text-center"
           >
             ¿Número equivocado?
