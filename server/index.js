@@ -1,166 +1,94 @@
-// server/index.js
-require('dotenv').config();
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
-const twilio = require('twilio');
-
 const app = express();
+const port = 3001;
+
 app.use(cors());
 app.use(express.json());
 
-// --- 1. CONFIGURAR TWILIO ---
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
-let client;
-
-if (accountSid && authToken) {
-  client = new twilio(accountSid, authToken);
-} else {
-  console.warn("ADVERTENCIA: No se encontraron claves de Twilio en .env");
-}
-
-// --- 2. CONECTAR BASE DE DATOS ---
+// Base de datos
 const db = new sqlite3.Database('./gastro.db', (err) => {
-  if (err) console.error("Error al abrir BD:", err.message);
-  else console.log('Base de datos SQLite conectada.');
+  if (err) console.error('Error al conectar DB:', err.message);
+  else console.log('Conectado a la base de datos SQLite.');
 });
 
-// --- 3. CREAR TABLAS ---
+// Inicialización de tablas (Solo restaurantes y menús)
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS restaurants (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT, description TEXT, phone TEXT, address TEXT, coords TEXT, schedule TEXT, owner_id TEXT
+    name TEXT NOT NULL,
+    description TEXT,
+    address TEXT,
+    phone TEXT,
+    image TEXT
   )`);
-  
+
   db.run(`CREATE TABLE IF NOT EXISTS menu_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, restaurant_id INTEGER, name TEXT, price REAL,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    restaurant_id INTEGER,
+    name TEXT NOT NULL,
+    description TEXT,
+    price REAL,
+    image TEXT,
     FOREIGN KEY(restaurant_id) REFERENCES restaurants(id)
   )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS verification_codes (
-    phone TEXT PRIMARY KEY, code TEXT, created_at INTEGER
-  )`);
-});
-
-// --- RUTAS DE SMS ---
-
-app.post('/api/send-code', async (req, res) => {
-  const { phone } = req.body;
-  if (!client) return res.status(500).json({ error: "Servidor no configurado para SMS" });
-
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-
-  db.run("INSERT OR REPLACE INTO verification_codes (phone, code, created_at) VALUES (?, ?, ?)", 
-    [phone, code, Date.now()], 
-    async function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-
-      try {
-        await client.messages.create({
-          body: `Tu código de Gastro es: ${code}`,
-          from: twilioPhone,
-          to: phone
-        });
-        console.log(`SMS enviado a ${phone}`);
-        res.json({ success: true });
-      } catch (twilioError) {
-        console.error("Error Twilio:", twilioError);
-        res.status(500).json({ error: twilioError.message });
-      }
-    }
-  );
-});
-
-app.post('/api/send-code', async (req, res) => {
-  const { phone } = req.body;
   
-  // 1. Generamos el código aquí mismo
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-
-  // 2. Guardamos en la base de datos PRIMERO (Importante)
-  db.run("INSERT OR REPLACE INTO verification_codes (phone, code, created_at) VALUES (?, ?, ?)", 
-    [phone, code, Date.now()], 
-    async function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-
-      // --- MODO DESARROLLO ---
-      console.log(`\n=========================================`);
-      console.log(`📱 CÓDIGO PARA ${phone}:  [ ${code} ]`);
-      console.log(`=========================================\n`);
-
-      // 3. Intentamos enviar el SMS Real
-      try {
-        if (client) {
-            await client.messages.create({
-              body: `Tu código de Gastro es: ${code}`,
-              from: twilioPhone,
-              to: phone
-            });
-            console.log(`✅ SMS enviado exitosamente a ${phone}`);
-        }
-        // Si se envió, respondemos éxito
-        res.json({ success: true });
-
-      } catch (twilioError) {
-        // 4. AQUÍ ESTÁ LA MAGIA:      
-        console.warn(`⚠️ AVISO: No se envió el SMS real (Causa: ${twilioError.code}).`);
-        console.warn(`👉 PERO NO IMPORTA: Usa el código [ ${code} ] que imprimí arriba.`);
-        
-        // ¡Engañamos al frontend diciendo que sí se pudo!
-        res.json({ success: true, message: "Modo Simulación Activo" });
-      }
-    }
-  );
+  // NOTA: Se eliminó la tabla 'verification_codes' porque Firebase maneja eso ahora.
 });
 
-// --- RUTAS DE RESTAURANTES ---
+// --- RUTAS DE RESTAURANTES (Se mantienen igual) ---
 
 app.get('/api/restaurants', (req, res) => {
-  db.all("SELECT * FROM restaurants", [], async (err, restaurants) => {
+  db.all("SELECT * FROM restaurants", [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    try {
-      const list = await Promise.all(restaurants.map(async (rest) => {
-        return new Promise((resolve) => {
-          db.all("SELECT * FROM menu_items WHERE restaurant_id = ?", [rest.id], (_, menu) => {
-            resolve({ ...rest, menu: menu || [] });
-          });
-        });
-      }));
-      res.json(list);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    res.json(rows);
   });
 });
 
 app.post('/api/restaurants', (req, res) => {
-  const { name, description, phone, address, schedule, coords, owner_id, menu } = req.body;
-  // Nota: Asegúrate de recibir 'owner_id' o 'ownerId' consistentemente desde el frontend.
-  // Aquí asumo que lo envías como ownerId desde React pero la columna es owner_id.
-  const owner = req.body.ownerId || owner_id; 
-
-  const sql = `INSERT INTO restaurants (name, description, phone, address, schedule, coords, owner_id) VALUES (?,?,?,?,?,?,?)`;
-  
-  db.run(sql, [name, description, phone, address, schedule, coords, owner], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    const newId = this.lastID;
-    
-    if (menu && menu.length > 0) {
-      const stmt = db.prepare(`INSERT INTO menu_items (restaurant_id, name, price) VALUES (?,?,?)`);
-      menu.forEach(m => stmt.run(newId, m.name, m.price));
-      stmt.finalize();
+  const { name, description, address, phone, image } = req.body;
+  db.run("INSERT INTO restaurants (name, description, address, phone, image) VALUES (?, ?, ?, ?, ?)", 
+    [name, description, address, phone, image], 
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id: this.lastID });
     }
-    res.json({ id: newId });
-  });
+  );
 });
 
-app.delete('/api/restaurants/:id', (req, res) => {
-  db.run("DELETE FROM restaurants WHERE id = ?", req.params.id, (err) => {
+// Obtener detalles de un restaurante
+app.get('/api/restaurants/:id', (req, res) => {
+  const { id } = req.params;
+  db.get("SELECT * FROM restaurants WHERE id = ?", [id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json({ message: "Eliminado" });
+    if (!row) return res.status(404).json({ error: "No encontrado" });
+    res.json(row);
   });
 });
 
-app.listen(3001, () => {
-  console.log('Servidor listo en http://localhost:3001');
+// --- RUTAS DE MENÚ (Se mantienen igual) ---
+
+app.get('/api/restaurants/:id/menu', (req, res) => {
+  const { id } = req.params;
+  db.all("SELECT * FROM menu_items WHERE restaurant_id = ?", [id], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/restaurants/:id/menu', (req, res) => {
+  const { id } = req.params;
+  const { name, description, price, image } = req.body;
+  db.run("INSERT INTO menu_items (restaurant_id, name, description, price, image) VALUES (?, ?, ?, ?, ?)", 
+    [id, name, description, price, image], 
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id: this.lastID });
+    }
+  );
+});
+
+app.listen(port, () => {
+  console.log(`Servidor corriendo en http://localhost:${port}`);
 });

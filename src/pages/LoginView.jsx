@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, ShieldCheck } from 'lucide-react';
 import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
-import { auth } from '../firebaseConfig'; // Importamos la config que creaste
+import { auth } from '../firebaseConfig'; // Importamos tu configuración
 import Button from '../components/Button';
 import InputGroup from '../components/InputGroup';
 
@@ -11,67 +11,68 @@ const LoginView = ({ onLogin, onCancel }) => {
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
-  const [confirmObj, setConfirmObj] = useState(null); // Objeto para confirmar el código
+  const [confirmObj, setConfirmObj] = useState(null);
 
-  // Formatear a +52 (México) si no tiene código de país
+  // Formato obligatorio para Firebase: +52 para México
   const formatPhone = (p) => {
     if (p.startsWith('+')) return p;
     return `+52${p}`; 
   };
 
-  // Inicializar Recaptcha Invisible (Requisito de Google)
+  // Configurar el ReCaptcha invisible (Requisito de seguridad de Google)
   useEffect(() => {
     if (!window.recaptchaVerifier) {
       window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
         'size': 'invisible',
-        'callback': (response) => {
-          // reCAPTCHA solved automatically
+        'callback': () => {
+          // Captcha resuelto automáticamente
         }
       });
     }
   }, []);
 
-  // --- PASO 1: PEDIR EL SMS A GOOGLE ---
+  // --- ENVIAR SMS ---
   const handleSendCode = async (e) => {
     e.preventDefault();
-    if(phone.length < 10) return alert("Número inválido");
+    if(phone.length < 10) return alert("Número inválido (mínimo 10 dígitos)");
     
     setLoading(true);
     const phoneNumber = formatPhone(phone);
 
     try {
       const appVerifier = window.recaptchaVerifier;
-      // Esta función de Firebase envía el SMS real
+      // Google envía el SMS aquí
       const confirmation = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
       
-      setConfirmObj(confirmation); // Guardamos la "promesa" de confirmación
-      setStep(2);
+      setConfirmObj(confirmation);
+      setStep(2); // Pasamos a pedir el código
       alert("SMS enviado. Revisa tu celular.");
     } catch (error) {
-      console.error("Error SMS:", error);
-      alert("Error enviando SMS: " + error.message);
-      // Si falla, reseteamos el captcha
+      console.error("Error Firebase:", error);
+      alert("No se pudo enviar el SMS. Verifica que el número sea correcto y tengas internet.");
+      
+      // Resetear captcha si falla
       if(window.recaptchaVerifier) window.recaptchaVerifier.clear();
     } finally {
       setLoading(false);
     }
   };
 
-  // --- PASO 2: VERIFICAR EL CÓDIGO CON GOOGLE ---
+  // --- VERIFICAR CÓDIGO ---
   const handleVerify = async (e) => {
     e.preventDefault();
-    if(!otp || !confirmObj) return;
+    if(!otp) return;
     
     setLoading(true);
     try {
-      // Le preguntamos a Firebase si el código es correcto
+      // Google verifica si el código es real
       const result = await confirmObj.confirm(otp);
       
-      // Si llegamos aquí, ¡es correcto!
+      // Si pasa, obtenemos el usuario
       const user = result.user;
       console.log("Usuario verificado:", user);
       
-      // Iniciamos sesión en TU app
+      // ¡Login exitoso! Entramos a la app
       onLogin(user.phoneNumber); 
     } catch (error) {
       alert("Código incorrecto o expirado.");
@@ -89,10 +90,10 @@ const LoginView = ({ onLogin, onCancel }) => {
         <h2 className="text-2xl font-bold text-gray-800">
           {step === 1 ? 'Acceso Telefónico' : 'Verificar Identidad'}
         </h2>
-        <p className="text-sm text-gray-500">Powered by Firebase Auth</p>
+        <p className="text-sm text-gray-500">Verificación segura con Google</p>
       </div>
 
-      {/* Contenedor invisible para el Recaptcha */}
+      {/* Este div es invisible pero necesario para el Captcha */}
       <div id="recaptcha-container"></div>
 
       {step === 1 ? (
@@ -114,7 +115,7 @@ const LoginView = ({ onLogin, onCancel }) => {
              </Button>
           </div>
           <p className="text-xs text-gray-400 mt-4 text-center">
-            Podrías recibir un desafío de "No soy un robot".
+            Podrías recibir un desafío visual de "No soy un robot".
           </p>
         </form>
       ) : (
