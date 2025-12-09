@@ -102,7 +102,7 @@ const LoginView = ({ onLogin, onCancel }) => {
             label="Celular (10 dígitos)" 
             placeholder="Ej: 5512345678" 
             value={phone} 
-            onChange={e => setPhone(e.target.value.replace(/\D/,''))} 
+            onChange={e => setPhone(e.target.value.replace(/\D/g,''))}
             type="tel"
             required
           />
