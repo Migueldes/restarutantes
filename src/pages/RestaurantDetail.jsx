@@ -64,9 +64,13 @@ const RestaurantDetail = ({ restaurant, onBack, isOwner, onEdit, onDelete }) => 
                 <Clock size={18} className="text-orange-500"/> Horarios
               </h3>
               <div className="text-gray-600 text-sm bg-gray-50 p-3 rounded-lg whitespace-pre-line">
-                {restaurant.schedule.split(', ').map((line, i) => (
+                {restaurant.schedule ? (
+                  restaurant.schedule.split(', ').map((line, i) => (
                     <div key={i} className="mb-1">{line}</div>
-                ))}
+                  ))
+                ) : (
+                  <p>Sin horarios registrados</p>
+                )}
               </div>
             </div>
             <div>
