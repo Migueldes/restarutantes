@@ -104,7 +104,9 @@ export default function App() {
                           r.description.toLowerCase().includes(searchTerm.toLowerCase());
     
     if (showOnlyMine && user) {
-      return matchesSearch && String(r.owner_id) === String(user.id);
+      const ownerIdDB = String(r.owner_id || '').replace(/\D/g, '');
+      const userIdApp = String(user.id || '').replace(/\D/g, '');
+      return matchesSearch && (ownerIdDB === userIdApp);
     }
     return matchesSearch;
   });
