@@ -13,7 +13,6 @@ const db = new sqlite3.Database('./gastro.db', (err) => {
   else console.log('Base de datos conectada.');
 });
 
-// --- 1. TABLAS CORREGIDAS (Con owner_id y schedule) ---
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS restaurants (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,7 +24,7 @@ db.serialize(() => {
     schedule TEXT,
     coords TEXT,
     owner_id TEXT
-  )`); // ^^^ Agregamos schedule, coords y owner_id
+  )`);
 
   db.run(`CREATE TABLE IF NOT EXISTS menu_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,61 +33,82 @@ db.serialize(() => {
     description TEXT,
     price REAL,
     image TEXT,
-    FOREIGN KEY(restaurant_id) REFERENCES restaurants(id)
+    FOREIGN KEY(restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE
   )`);
 });
 
-// --- 2. RUTAS CORREGIDAS ---
-
+// --- OBTENER TODOS (CON MENÚ) ---
 app.get('/api/restaurants', (req, res) => {
-  db.all("SELECT * FROM restaurants", [], (err, rows) => {
+  db.all("SELECT * FROM restaurants", [], async (err, restaurants) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
+
+    try {
+      const list = await Promise.all(restaurants.map(async (rest) => {
+        return new Promise((resolve) => {
+          db.all("SELECT * FROM menu_items WHERE restaurant_id = ?", [rest.id], (_, menu) => {
+            resolve({ ...rest, menu: menu || [] });
+          });
+        });
+      }));
+      res.json(list);
+    } catch (e) { res.status(500).json({ error: e.message }); }
   });
 });
 
+// --- CREAR NUEVO (AHORA GUARDA EL MENÚ) ---
 app.post('/api/restaurants', (req, res) => {
-  // Ahora recibimos y guardamos schedule y owner_id
-  const { name, description, address, phone, image, schedule, coords, ownerId } = req.body;
+  const { name, description, address, phone, image, schedule, coords, ownerId, menu } = req.body;
   
   const sql = `INSERT INTO restaurants (name, description, address, phone, image, schedule, coords, owner_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
   
   db.run(sql, [name, description, address, phone, image, schedule, coords, ownerId], function(err) {
     if (err) return res.status(500).json({ error: err.message });
-    res.json({ id: this.lastID });
+    const restaurantId = this.lastID;
+
+    // ¡AQUÍ ESTÁ LA MAGIA! Guardamos el menú
+    if (menu && menu.length > 0) {
+      const stmt = db.prepare("INSERT INTO menu_items (restaurant_id, name, price) VALUES (?, ?, ?)");
+      menu.forEach(item => {
+        stmt.run(restaurantId, item.name, item.price);
+      });
+      stmt.finalize();
+    }
+    
+    res.json({ id: restaurantId });
   });
 });
 
-app.get('/api/restaurants/:id', (req, res) => {
-  db.get("SELECT * FROM restaurants WHERE id = ?", [req.params.id], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(row || {});
-  });
-});
+// --- ACTUALIZAR (PUT) ---
+app.put('/api/restaurants/:id', (req, res) => {
+  const { name, description, address, phone, schedule, coords, menu } = req.body;
+  const id = req.params.id;
 
-// Rutas de menú (sin cambios)
-app.get('/api/restaurants/:id/menu', (req, res) => {
-  db.all("SELECT * FROM menu_items WHERE restaurant_id = ?", [req.params.id], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
-});
-
-app.post('/api/restaurants/:id/menu', (req, res) => {
-  const { name, description, price, image } = req.body;
-  db.run("INSERT INTO menu_items (restaurant_id, name, description, price, image) VALUES (?, ?, ?, ?, ?)", 
-    [req.params.id, name, description, price, image], function(err) {
+  db.run(
+    `UPDATE restaurants SET name=?, description=?, address=?, phone=?, schedule=?, coords=? WHERE id=?`,
+    [name, description, address, phone, schedule, coords, id],
+    function(err) {
       if (err) return res.status(500).json({ error: err.message });
-      res.json({ id: this.lastID });
+
+      // Actualizar menú: Borramos los viejos y ponemos los nuevos (más fácil)
+      db.run("DELETE FROM menu_items WHERE restaurant_id = ?", [id], () => {
+        if (menu && menu.length > 0) {
+          const stmt = db.prepare("INSERT INTO menu_items (restaurant_id, name, price) VALUES (?, ?, ?)");
+          menu.forEach(item => stmt.run(id, item.name, item.price));
+          stmt.finalize();
+        }
+        res.json({ success: true });
+      });
     }
   );
 });
 
+// --- BORRAR ---
 app.delete('/api/restaurants/:id', (req, res) => {
-    db.run("DELETE FROM restaurants WHERE id = ?", req.params.id, (err) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ message: "Eliminado" });
-    });
+  db.run("DELETE FROM restaurants WHERE id = ?", req.params.id, (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    db.run("DELETE FROM menu_items WHERE restaurant_id = ?", req.params.id);
+    res.json({ message: "Eliminado" });
+  });
 });
 
 app.listen(port, () => {

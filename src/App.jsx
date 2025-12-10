@@ -54,11 +54,12 @@ export default function App() {
   };
 
   const handleSaveRestaurant = (data) => {
-    // Asociamos el restaurante al teléfono del usuario
     const payload = { ...data, ownerId: user.id };
+    const method = data.id ? 'PUT' : 'POST';
+    const url = data.id ? `${API_URL}/${data.id}` : API_URL;
 
-    fetch(API_URL, {
-        method: 'POST',
+    fetch(url, {
+        method: method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     })
