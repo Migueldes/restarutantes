@@ -50,10 +50,8 @@ const RestaurantForm = ({ initialData, onSave, onCancel }) => {
         
         setFormData(prev => ({ ...prev, coords: coords }));
         setLocationFound(true);
-        // EMOJI ELIMINADO AQUÍ
         alert(`Ubicación encontrada!\nLat: ${bestMatch.lat}\nLon: ${bestMatch.lon}`);
       } else {
-        // EMOJI ELIMINADO AQUÍ
         alert("No pudimos encontrar esa dirección. Intenta ser más específico (Calle, Número, Ciudad, País).");
         setLocationFound(false);
       }
